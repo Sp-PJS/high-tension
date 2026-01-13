@@ -9,6 +9,13 @@ spring:
     username: root
     password: admin1234
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # [추가] 동시성 테스트(100회 이상) 시 DB 커넥션 부족으로 인한 Feign 500 에러 방지
+    hikari:
+      maximum-pool-size: 50       # 기본값 10에서 50으로 상향
+      minimum-idle: 10
+      connection-timeout: 5000    # 커넥션 획득 대기 시간 5초
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
@@ -29,28 +36,32 @@ spring:
     redis:
       host: localhost
       port: 6379
-      timeout: 3000ms
+      timeout: 5000ms # [수정] 부하 상황을 고려하여 타임아웃 5초로 완화
 
   cache:
     type: redis
-    redis:
-      time-to-live: 5000
-      cache-null-values: false
-      use-key-prefix: true
-      key-prefix: "product::" # 이 부분이 에러원인(""로 감싸줘야 함)
+#    redis:
+#      time-to-live: 5000
+#      cache-null-values: false
+#      use-key-prefix: true
+#      key-prefix: "product::" # 이 부분이 에러원인(""로 감싸줘야 함)
 
 redisson:
   mode: single
   single:
     address: redis://localhost:6379
-  #  mode: cluster # 나중에 K8s로 배포를 한다고 가정하면 필요한 코드
-  #  cluster:
-  #    nodes:
-  #      - redis://redis-0.redis:6379
-  #      - redis://redis-1.redis:6379
-  #      - redis://redis-2.redis:6379
+    #  mode: cluster # 나중에 K8s로 배포를 한다고 가정하면 필요한 코드
+    #  cluster:
+    #    nodes:
+    #      - redis://redis-0.redis:6379
+    #      - redis://redis-1.redis:6379
+    #      - redis://redis-2.redis:6379
+
+    # [추가] Redisson 자체의 커넥션 풀도 상향하여 락 획득 시 병목 제거
+    connectionMinimumIdleSize: 10
+    connectionPoolSize: 64
   lock:
-    wait-time: 5s
+    wait-time: 10s # [수정] 100건 동시 처리 시 대기 시간 부족 방지를 위해 10초로 상향
     lease-time: 15s
 
 management:
