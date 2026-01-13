@@ -54,16 +54,21 @@ public class ProductService {
 		return ProductResponse.from(savedProduct);
 	}
 
-	// 일반상품 단건 조회
+	// [수정] 일반상품 단건 조회(Redis에 데이터가 존재하지 않으면 DB 조회 메서드 호출)
 	@Transactional(readOnly = true)
 	@Cacheable(
 		cacheNames = "product",
 		key = "#productId"
 	)
 	public ProductResponse getProductById(UUID productId) {
-		Product product = productRepository.findByIdAndDeletedAtIsNull(productId)
-			.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+		return getProductByIdInternal(productId);
+	}
 
+	// [수정] 내부 Saga/통신용 (캐시 미사용)
+	@Transactional(readOnly = true)
+	public ProductResponse getProductByIdInternal(UUID productId) {
+		Product product = productRepository.findById(productId)
+			.orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
 		return ProductResponse.from(product);
 	}
 
@@ -143,7 +148,6 @@ public class ProductService {
 		condition = "#result != null"
 	)
 	public LimitedProductResponse createLimitedProduct(LimitedProductCreateRequest request) {
-
 
 		Limited_Product limitedProduct = Limited_Product.createProduct(
 			request.name(),

@@ -22,8 +22,11 @@ public class RedisCacheEvictAdapter implements RedisCacheEvictPort {
 	@Override
 	public void evictStockCacheAfterCommit(UUID productId) {
 
+		// [수정] Serializer와의 정합성을 위해 UUID를 String으로 변환
+		String cacheKey = productId.toString();
+
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-			evict(productId);
+			evict(cacheKey);
 			return;
 		}
 
@@ -31,15 +34,16 @@ public class RedisCacheEvictAdapter implements RedisCacheEvictPort {
 			new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
-					evict(productId);
+					evict(cacheKey);
 				}
 			}
 		);
 	}
 
-	private void evict(UUID productId) {
+	// [수정] 파라미터 타입을 String으로 변경하여 일관성 유지
+	private void evict(String cacheKey) {
 		if (cacheManager.getCache(STOCK_CACHE) != null) {
-			cacheManager.getCache(STOCK_CACHE).evict(productId);
+			cacheManager.getCache(STOCK_CACHE).evict(cacheKey);
 		}
 	}
 }

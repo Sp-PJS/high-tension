@@ -52,12 +52,20 @@ public class ProductController {
 		);
 	}
 
-	// 일반상품 ID로 단건 조회
+	// [수정] 일반상품 ID로 단건 조회(@Cacheable 붙은 메서드 호출)
 	@Operation(summary = "일반상품 단건조회", description = "일반상품을 단건조회합니다.")
 	@GetMapping("/products/{productId}")
 	@PreAuthorize("isAuthenticated()")
 	public ResponseEntity<ApiResponse<ProductResponse>> getProductById(@PathVariable UUID productId) {
 		ProductResponse response = productService.getProductById(productId);
+		return ResponseEntity.ok(ApiResponse.success(response));
+	}
+	// [수정] 내부 통신 API로 분리
+	@Operation(summary = "내부용 일반상품 단건 조회", description = "캐시를 타지 않고 DB에서 직접 상품 상세 정보를 조회합니다.")
+	@GetMapping("/internal/products/{productId}") // 경로에 /internal 추가
+	public ResponseEntity<ApiResponse<ProductResponse>> getProductInternal(@PathVariable UUID productId) {
+		// @Cacheable이 붙지 않은 순수 서비스 메서드 호출
+		ProductResponse response = productService.getProductByIdInternal(productId);
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
 

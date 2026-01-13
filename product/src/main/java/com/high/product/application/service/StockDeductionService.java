@@ -95,9 +95,15 @@ public class StockDeductionService {
 					stock.reduce(item.quantity());
 				}
 
-				// DB 트랜잭션 이후 캐시 무효화
+				// DB 트랜잭션 이후 캐시 무효화([수정]: try-catch로 보호)
 				for (OrderItemResponse item : order.orderItems()) {
-					stockCacheEvictPort.evictStockCacheAfterCommit(item.productId());
+					try {
+						stockCacheEvictPort.evictStockCacheAfterCommit(item.productId());
+					} catch (Exception cacheEx) {
+						// 캐시 삭제 실패는 로그만 남기고, 전체 프로세스를 중단시키지 않음
+						log.error("캐시 무효화 실패 (Saga는 계속 진행) - productId: {}, error: {}",
+							item.productId(), cacheEx.getMessage());
+					}
 				}
 
 				// 성공 이벤트 + 멱등성 기록

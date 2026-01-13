@@ -12,6 +12,8 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
@@ -28,11 +30,16 @@ public class RedisCacheConfig {
 		ObjectMapper objectMapper = new ObjectMapper();
 		objectMapper.registerModule(new JavaTimeModule()); // 날짜/시간 모듈 등록
 
+		// [추가] 역직렬화 시 모르는 속성이 있어도 실패하지 않도록 설정 (유연성 확보)
+		objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
 		// Redis에 저장된 JSON을 다시 객체로 바꿀 때 클래스 정보를 포함하도록 설정 (역직렬화 시 에러 방지)
 		PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
 			.allowIfBaseType(Object.class)
 			.build();
-		objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
+
+		// [수정] JsonTypeInfo.As.PROPERTY를 명시하여 missing type id property '@class' 에러 해결
+		objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
 
 		// 커스텀 ObjectMapper를 적용한 Serializer 생성
 		GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);

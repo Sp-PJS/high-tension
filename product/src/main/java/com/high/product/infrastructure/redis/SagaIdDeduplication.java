@@ -19,18 +19,16 @@ public class SagaIdDeduplication implements SagaDeduplicationPort {
 	// 이미 존재하는지 체크
 	@Override
 	public boolean exists(String key) {
-		return Boolean.TRUE.equals(redissonClient.getBucket(key).get());
+		return redissonClient.getBucket(key).isExists(); // [수정] get().get() 대신 isExists()로 효율화
 	}
 
 	// 최초 처리 시도
 	@Override
 	public boolean tryProcess(String key, long ttlSeconds) {
 		RBucket<Boolean> bucket = redissonClient.getBucket(key);
-		Boolean exists = bucket.get();
-		if (exists != null && exists)
-			return false;
-		bucket.set(true, ttlSeconds, TimeUnit.SECONDS);
-		return true;
+
+		// [수정] 원자적(Atomic) 연산인 setIfAbsent를 사용하여 동시성 환경에서 멱등성 완벽 보장
+		return bucket.setIfAbsent(true, java.time.Duration.ofSeconds(ttlSeconds));
 	}
 
 	// 최종 실패 상태 등을 강제로 저장할 때 사용
