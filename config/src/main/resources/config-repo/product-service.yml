@@ -60,9 +60,6 @@ redisson:
     # [추가] Redisson 자체의 커넥션 풀도 상향하여 락 획득 시 병목 제거
     connectionMinimumIdleSize: 10
     connectionPoolSize: 64
-  lock:
-    wait-time: 10s # [수정] 100건 동시 처리 시 대기 시간 부족 방지를 위해 10초로 상향
-    lease-time: 15s
 
 management:
   zipkin:
