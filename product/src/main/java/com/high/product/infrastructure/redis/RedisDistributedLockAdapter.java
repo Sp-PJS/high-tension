@@ -39,7 +39,7 @@ public class RedisDistributedLockAdapter implements DistributedLockPort {
 		try {
 			// 순서대로 락 획득
 			for (RLock lock : locks) {
-				boolean acquired = lock.tryLock(5, 0, TimeUnit.SECONDS);
+				boolean acquired = lock.tryLock(5, -1, TimeUnit.SECONDS);
 				if (!acquired) {
 					log.error("분산 락 획득 실패: {}", lock.getName());
 					throw new IllegalStateException("분산 락 획득 실패: " + lock.getName());
