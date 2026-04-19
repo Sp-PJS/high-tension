@@ -18,9 +18,4 @@ public interface JpaStockRepository extends JpaRepository<Product_Stock, UUID> {
 
 	// 상품 ID로 재고 존재 여부 확인
 	boolean existsByProductId(UUID productId);
-
-	// 비관적 락 적용
-	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select p from Product_Stock p where p.productId = :productId")
-	Optional<Product_Stock> findByProductIdForUpdate(UUID productId);
 }
