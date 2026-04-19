@@ -1,11 +1,9 @@
 package com.high.product.application.service;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.high.product.application.dto.external.OrderDetailResponse;
 import com.high.product.application.dto.external.OrderItemResponse;
 import com.high.product.application.dto.kafka.failure.StockDeductionFailMessage;
@@ -15,10 +13,9 @@ import com.high.product.application.exception.ProductException;
 import com.high.product.application.port.DistributedLockPort;
 import com.high.product.application.port.OrderQueryPort;
 import com.high.product.application.port.RedisCacheEvictPort;
-import com.high.product.domain.model.KafkaOutbox;
-import com.high.product.domain.repository.KafkaOutboxRepository;
 import com.high.product.application.port.SagaDeduplicationPort;
 import com.high.product.domain.model.Product_Stock;
+import com.high.product.domain.repository.KafkaOutboxRepository;
 import com.high.product.domain.repository.StockRepository;
 import com.high.product.exception.ProductErrorCode;
 
@@ -36,7 +33,6 @@ public class StockDeductionService {
 	private final SagaDeduplicationPort sagaDeduplicationPort;
 	private final RedisCacheEvictPort stockCacheEvictPort;
 	private final KafkaOutboxRepository kafkaOutboxRepository;
-	private final ObjectMapper objectMapper;
 
 	public void handleStockDeduction(StockDeductionCommandRequest request) {
 
@@ -60,7 +56,7 @@ public class StockDeductionService {
 				log.info("이미 성공 처리된 sagaId={}, success 재전송", request.sagaId());
 
 				// 아웃박스 PENDING으로 저장 (재전송)
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-deduction-success",
 					new StockDeductionSuccessMessage(request.sagaId(), request.orderId(), request.userId())
 				);
@@ -71,7 +67,7 @@ public class StockDeductionService {
 				log.info("이미 실패 처리된 sagaId={}, fail 재전송", request.sagaId());
 
 				// 아웃박스 PENDING으로 저장 (재전송)
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-deduction-fail",
 					new StockDeductionFailMessage(request.sagaId(), request.orderId(), "이미 실패 처리된 saga",
 						request.userId())
@@ -111,7 +107,7 @@ public class StockDeductionService {
 				sagaDeduplicationPort.remove("processing:" + request.sagaId());
 
 				// 아웃박스 PENDING으로 저장
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-deduction-success",
 					new StockDeductionSuccessMessage(request.sagaId(), request.orderId(), request.userId())
 				);
@@ -123,37 +119,19 @@ public class StockDeductionService {
 				sagaDeduplicationPort.remove("processing:" + request.sagaId());
 
 				log.error("재고 차감 실패 sagaId={}", request.sagaId(), ex);
+
+				// 재고 차감 실패 시 아웃박스 이벤트 생성
+				sagaDeduplicationPort.tryProcess("fail:" + request.sagaId(), 600);
+				kafkaOutboxRepository.saveOutboxEvent(
+					"stock-deduction-fail",
+					new StockDeductionFailMessage(request.sagaId(), request.orderId(), ex.getMessage(), request.userId())
+				);
+
 				throw ex;
 			} finally {
 				// processing 키 제거 (재처리 가능하도록)
 				sagaDeduplicationPort.remove("processing:" + request.sagaId());
 			}
 		});
-	}
-
-	// 아웃박스 저장 헬퍼 메서드
-	private void saveOutboxEvent(String topic, Object message) {
-		try {
-			String payload = objectMapper.writeValueAsString(message);
-			KafkaOutbox outbox = KafkaOutbox.builder()
-				.topic(topic)
-				.messageKey(message instanceof StockDeductionSuccessMessage s ? String.valueOf(s.sagaId()) :
-					message instanceof StockDeductionFailMessage f ? String.valueOf(f.sagaId()) :
-						UUID.randomUUID().toString())
-				.payload(payload)
-				.status("PENDING")
-				.sagaId(message instanceof StockDeductionSuccessMessage s ? s.sagaId() :
-					message instanceof StockDeductionFailMessage f ? f.sagaId() : null)
-				.orderId(message instanceof StockDeductionSuccessMessage s ? s.orderId() :
-					message instanceof StockDeductionFailMessage f ? f.orderId() : null)
-				.userId(message instanceof StockDeductionSuccessMessage s ? s.userId() :
-					message instanceof StockDeductionFailMessage f ? f.userId() : null)
-				.build();
-
-			kafkaOutboxRepository.save(outbox);
-		} catch (Exception e) {
-			log.error("Kafka Outbox 저장 실패", e);
-			throw new RuntimeException(e);
-		}
 	}
 }

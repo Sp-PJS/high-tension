@@ -1,11 +1,9 @@
 package com.high.product.application.service;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.high.product.application.dto.external.OrderDetailResponse;
 import com.high.product.application.dto.external.OrderItemResponse;
 import com.high.product.application.dto.kafka.failure.StockRestoreFailMessage;
@@ -15,9 +13,8 @@ import com.high.product.application.exception.ProductException;
 import com.high.product.application.port.DistributedLockPort;
 import com.high.product.application.port.OrderQueryPort;
 import com.high.product.application.port.RedisCacheEvictPort;
-import com.high.product.domain.model.KafkaOutbox;
-import com.high.product.domain.repository.KafkaOutboxRepository;
 import com.high.product.application.port.SagaDeduplicationPort;
+import com.high.product.domain.repository.KafkaOutboxRepository;
 import com.high.product.domain.model.Product_Stock;
 import com.high.product.domain.repository.StockRepository;
 import com.high.product.exception.ProductErrorCode;
@@ -35,8 +32,7 @@ public class StockRestoreService {
 	private final DistributedLockPort distributedLockPort;
 	private final SagaDeduplicationPort sagaDeduplicationPort;
 	private final RedisCacheEvictPort stockCacheEvictPort;
-	private final KafkaOutboxRepository kafkaOutboxRepository;
-	private final ObjectMapper objectMapper;
+	private final KafkaOutboxRepository kafkaOutboxRepository; // ObjectMapper 제거됨
 
 	public void handleStockRestore(StockRestoreCommandRequest request) {
 
@@ -60,7 +56,7 @@ public class StockRestoreService {
 				log.info("이미 복원 성공 sagaId={}, success 재전송", request.sagaId());
 
 				// 아웃박스 PENDING으로 저장 (재전송)
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-restore-success",
 					new StockRestoreSuccessMessage(request.sagaId(), request.orderId(), request.userId())
 				);
@@ -72,7 +68,7 @@ public class StockRestoreService {
 				log.info("이미 복원 실패 sagaId={}, fail 재전송", request.sagaId());
 
 				// 아웃박스 PENDING으로 저장 (재전송)
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-restore-fail",
 					new StockRestoreFailMessage(request.sagaId(), request.orderId(), "이미 실패 처리된 복원 saga",
 						request.userId())
@@ -98,15 +94,20 @@ public class StockRestoreService {
 
 				// DB 트랜잭션 이후 캐시 무효화
 				for (OrderItemResponse item : order.orderItems()) {
-					stockCacheEvictPort.evictStockCacheAfterCommit(item.productId());
+					try {
+						stockCacheEvictPort.evictStockCacheAfterCommit(item.productId());
+					} catch (Exception cacheEx) {
+						log.error("캐시 무효화 실패 (Saga는 계속 진행) - productId: {}, error: {}",
+							item.productId(), cacheEx.getMessage());
+					}
 				}
 
 				// 성공 이벤트 + 멱등성 기록
 				sagaDeduplicationPort.tryProcess("restore:success:" + request.sagaId(), 600);
-				sagaDeduplicationPort.remove("processing:" + request.sagaId());
+				sagaDeduplicationPort.remove("restore:processing:" + request.sagaId());
 
 				// 아웃박스 PENDING으로 저장
-				saveOutboxEvent(
+				kafkaOutboxRepository.saveOutboxEvent(
 					"stock-restore-success",
 					new StockRestoreSuccessMessage(request.sagaId(), request.orderId(), request.userId())
 				);
@@ -115,40 +116,22 @@ public class StockRestoreService {
 
 			} catch (Exception ex) {
 
-				sagaDeduplicationPort.remove("processing:" + request.sagaId());
+				sagaDeduplicationPort.remove("restore:processing:" + request.sagaId());
 
 				log.error("재고 복원 실패 sagaId={}", request.sagaId(), ex);
+
+				// [추가]: 재고 복원 실패 시 아웃박스 이벤트 생성
+				sagaDeduplicationPort.tryProcess("restore:fail:" + request.sagaId(), 600);
+				kafkaOutboxRepository.saveOutboxEvent(
+					"stock-restore-fail",
+					new StockRestoreFailMessage(request.sagaId(), request.orderId(), ex.getMessage(), request.userId())
+				);
+
 				throw ex;
 			} finally {
 				// processing 키 제거 (재처리 가능하도록)
-				sagaDeduplicationPort.remove("processing:" + request.sagaId());
+				sagaDeduplicationPort.remove("restore:processing:" + request.sagaId());
 			}
 		});
-	}
-
-	// 아웃박스 저장 헬퍼 메서드
-	private void saveOutboxEvent(String topic, Object message) {
-		try {
-			String payload = objectMapper.writeValueAsString(message);
-			KafkaOutbox outbox = KafkaOutbox.builder()
-				.topic(topic)
-				.messageKey(message instanceof StockRestoreSuccessMessage s ? String.valueOf(s.sagaId()) :
-					message instanceof StockRestoreFailMessage f ? String.valueOf(f.sagaId()) :
-						UUID.randomUUID().toString())
-				.payload(payload)
-				.status("PENDING")
-				.sagaId(message instanceof StockRestoreSuccessMessage s ? s.sagaId() :
-					message instanceof StockRestoreFailMessage f ? f.sagaId() : null)
-				.orderId(message instanceof StockRestoreSuccessMessage s ? s.orderId() :
-					message instanceof StockRestoreFailMessage f ? f.orderId() : null)
-				.userId(message instanceof StockRestoreSuccessMessage s ? s.userId() :
-					message instanceof StockRestoreFailMessage f ? f.userId() : null)
-				.build();
-
-			kafkaOutboxRepository.save(outbox);
-		} catch (Exception e) {
-			log.error("Kafka Outbox 저장 실패", e);
-			throw new RuntimeException(e);
-		}
 	}
 }
