@@ -11,4 +11,6 @@ public interface KafkaOutboxRepository {
 	KafkaOutbox save(KafkaOutbox outbox);
 
 	void markAsSent(KafkaOutbox outbox);
+
+	void saveOutboxEvent(String topic, Object message);
 }
