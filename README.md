@@ -155,7 +155,22 @@ MSA 아키텍처를 기반으로 핵심 커머스 기능을 유연하게 제공�
 - Redis, DB의 커넥션 풀 및 타임아웃 설정, Redisson 멀티 분산 락의 옵션 값(waitTime, leaseTime, Watchdog)을 조정하여 Jmeter를 통한 테스트 결과 평균 응답 속도를 232ms까지 개선했습니다. [2026.02.13 성능 개선]
 - Redisson의 Watchdog 옵션을 활성화 했습니다. [2026.04.16 leaseTime 수치 변경]
 - 불필요한 코드를 제거했고 Application 계층에서 infra 계층을 참조하는 구조적인 문제 & 재고 차감/복원 실패 시, 아웃박스 테이블을 생성하는 로직을 추가하여 구조적인 결함을 해결했습니다. [2026.04.19 헥사고날 아키텍처 보완, 재고 데이터/Saga 데이터 정합성 보완]
+<br>
 
+<h4>동시 요청 1000건 이상에서의 한계점[2026.04.27 추가]</h4>
+<br>
+
+- 한계: Jmeter를 통한 1000건 이상에서의 동시 요청에서 에러율 급증(64.8%), 데이터 정합성이 깨지는 문제, 병목현상(처리량 및 평균 응답속도 저하)등의 한계점 식별했습니다.
+- 해결 방법: DB/Reids의 부하를 고려하여 Redisson의 옵션 값(waitTime, leaseTime, Watchdog) 변경, 커넥션 풀 & 타임 아웃 설정을 통해 평균 응답속도(2932ms)와 처리량(31.5/sec)을 개선했지만 데이터 정합성 문제와 에러율 문제는 해결하지 못했습니다.
+- 추가적인 예상 해결 방법: 기존 스케쥴링을 통한 Polling & 메시지 발행을 CDC(Debezium)로 교체, Kafka 파티셔닝 전략 & Consumer 수평 확장 도입을 고려하고 있습니다.
+
+<br>
+<h4> 결과트리</h4>
+<img width="1114" height="841" alt="Jmeter_결과트리" src="https://github.com/user-attachments/assets/02c7d092-0885-48c4-a0af-90c4da9fa32d" />
+<br>
+
+<h4>요약보고서</h4>
+<img width="1919" height="1032" alt="Jmeter_요약보고서" src="https://github.com/user-attachments/assets/963ede23-d8e4-481b-84f3-b297d0e375dd" />
 
 ---
 
