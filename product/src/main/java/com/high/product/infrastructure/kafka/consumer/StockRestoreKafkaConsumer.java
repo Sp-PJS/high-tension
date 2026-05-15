@@ -7,17 +7,14 @@ import java.time.LocalDateTime;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.high.product.application.dto.kafka.dlq.StockDeductionDlqMessage;
 import com.high.product.application.dto.kafka.dlq.StockRestoreDlqMessage;
-import com.high.product.application.dto.kafka.failure.StockDeductionFailMessage;
-import com.high.product.application.dto.kafka.request.StockDeductionCommandRequest;
+import com.high.product.application.dto.kafka.failure.StockRestoreFailMessage;
 import com.high.product.application.dto.kafka.request.StockRestoreCommandRequest;
 import com.high.product.application.service.StockRestoreService;
 import com.high.product.domain.model.KafkaOutbox;
@@ -35,7 +32,6 @@ public class StockRestoreKafkaConsumer {
 
 	private final StockRestoreService stockRestoreService;
 	private final ObjectMapper objectMapper;
-	private final KafkaTemplate<String, String> kafkaTemplate;
 	private final SagaDeduplicationPort sagaDeduplicationPort;
 	private final KafkaOutboxRepository kafkaOutboxRepository;
 
@@ -101,8 +97,8 @@ public class StockRestoreKafkaConsumer {
 		try {
 			String stackTrace = getStackTraceAsString(e);
 
-			StockDeductionCommandRequest request =
-				objectMapper.readValue(message, StockDeductionCommandRequest.class);
+StockRestoreCommandRequest request =
+				objectMapper.readValue(message, StockRestoreCommandRequest.class);
 
 			// 이미 실패 처리된 saga면 중복 실패 이벤트 발행 방지
 			if (sagaDeduplicationPort.exists("fail:" + request.sagaId())) {
@@ -111,7 +107,7 @@ public class StockRestoreKafkaConsumer {
 			}
 
 			// DLQ 메시지 로깅
-			StockDeductionDlqMessage dlqMessage = new StockDeductionDlqMessage(
+			StockRestoreDlqMessage dlqMessage = new StockRestoreDlqMessage(
 				request.sagaId(),
 				request.orderId(),
 				request.userId(),
@@ -127,8 +123,8 @@ public class StockRestoreKafkaConsumer {
 			log.error("[DLQ] 재고 차감 최종 재시도 실패: {}", dlqMessage);
 			try {
 				// 여기서만 실패 이벤트 발행
-				StockDeductionFailMessage failMessage =
-					new StockDeductionFailMessage(
+				StockRestoreFailMessage failMessage =
+					new StockRestoreFailMessage(
 						request.sagaId(),
 						request.orderId(),
 						e.getMessage(),
@@ -136,7 +132,7 @@ public class StockRestoreKafkaConsumer {
 					);
 
 				KafkaOutbox outbox = KafkaOutbox.builder()
-					.topic("stock-deduction-fail")
+					.topic("stock-restore-fail")
 					.payload(objectMapper.writeValueAsString(failMessage))
 					.status("PENDING")
 					.sagaId(request.sagaId())
