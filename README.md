@@ -1,8 +1,20 @@
 # 🛍️ 온라인 쇼핑 플랫폼 - HIGH TENSION
 
 <img src="./assets/high-tension-banner.png" alt="high-tension" width="100%">
+<br>
+<br>
 
+> ⚠️ **안내 드립니다**
 
+본 레포지토리는 팀 프로젝트 완료 후, 제가 담당한 **'상품 서비스'의 기술적 한계를 극복하고 시스템 안정성을 끌어올리기 위해 개인적으로 진행한 고도화 및 리팩토링 저장소**입니다.
+<br>
+<br>
+이력서에 기재된 **응답 속도 232ms 최적화, 1,000건 환경에서의 에러율 64.8% 식별 및 구조 개선 대안 설계** 등의 모든 수치와 기술적 성과는 본 레포지토리의 **커밋 로그와 기능 상세(상품), PR 내역**을 통해 직접 확인하실 수 있습니다.
+<br>
+<br>
+**조직(팀) Repository URL:** https://github.com/sharedeffort/high-tension
+
+---
 <br>
 <br>
 
@@ -60,7 +72,7 @@ MSA 아키텍처를 기반으로 핵심 커머스 기능을 유연하게 제공�
 
 </br>
 
-# 🛠️Technology Stack (기술 스택)
+# 🛠️ Technology Stack (기술 스택)
 
 ### Backend
 ![Java](https://img.shields.io/badge/Java%2017-007396?style=for-the-badge&logo=java&logoColor=white)
@@ -105,7 +117,7 @@ MSA 아키텍처를 기반으로 핵심 커머스 기능을 유연하게 제공�
 <br>
 
 
-# 🗝️Features (기능 상세)
+# 🗝️ Features (기능 상세)
 
 ## 1) 주문 오케스트레이션 (Saga 기반 분산 트랜잭션 관리)
 
@@ -358,7 +370,7 @@ Config Server와 API Gateway를 포함한 멀티 모듈 구조로 구성되어 �
 <br>
 <br>
 
-# ✈️Development Workflow (개발 워크플로우)
+# ✈️ Development Workflow (개발 워크플로우)
 
 ## 브랜치 전략, 커밋 컨벤션
 Git Flow를 기반으로 하며, 다음과 같은 브랜치를 사용합니다.
